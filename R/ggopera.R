@@ -104,6 +104,7 @@ ggopera.mixture <- function(x, type = 1, dates = NULL, col = NULL) {
     p <- p + geom_boxplot(mapping = aes(x = experts, y = value, fill = experts))
     p <- p + labs(title = "Weights associated with the experts", y = "Weights", x = NULL)
     p <- p + scale_fill_manual(name = "Experts", values = colors)
+    p <- p + guides(fill = guide_legend(reverse = TRUE))
     
     colx <- colors[names.experts]
     colx <- colx[i.order]
@@ -207,6 +208,7 @@ ggopera.mixture <- function(x, type = 1, dates = NULL, col = NULL) {
     }
     
     p <- p + scale_fill_manual(name = "Experts", values = colors)
+    p <- p + guides(fill = guide_legend(reverse = TRUE))
     
   }
   
