@@ -7,7 +7,11 @@
 
 
 library("opera")
+if (!requireNamespace("mgcv", quietly = TRUE)) 
+  stop("mgcv is needed for this function to work. Install it via install.packages(\"mgcv\")", call. = FALSE)
 library("mgcv")
+if (!requireNamespace("caret", quietly = TRUE)) 
+  stop("caret is needed for this function to work. Install it via install.packages(\"caret\")", call. = FALSE)
 library("caret")
 
 

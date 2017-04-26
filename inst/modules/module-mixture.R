@@ -36,9 +36,12 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   
-  type_graph <- reactiveVal(1:6) 
-  observeEvent(input$type, {
-    type_graph(input$type)
+  # type_graph <- reactiveVal(1:6) 
+  # observeEvent(input$type, {
+  #   type_graph(input$type)
+  # })
+  type_graph <- reactive({
+    input$type
   })
   
   opera_mixture <- reactive({
