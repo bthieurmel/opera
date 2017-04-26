@@ -71,14 +71,14 @@ ggopera.mixture <- function(x, type = 1, dates = NULL, col = NULL) {
     weights.long <- reshape.opera(x$weights, names.experts)
     weights.long$experts <- factor(weights.long$experts, levels = names(weights), ordered = TRUE)
     if (!is.null(dates) && length(dates) == nrow(x$weights)) {
-      weights.long$id <- dates
+      weights.long$time <- dates
     }
     p <- ggplot(data = weights.long)
     if (x$model == "Ridge") {
-      p <- p + geom_line(mapping = aes(x = id, y = value, color = experts, linetype = experts), size = 1.2)
+      p <- p + geom_line(mapping = aes(x = time, y = value, color = experts, linetype = experts), size = 1.2)
       p <- p + scale_color_manual(name = "Experts", values = colors) + guides(linetype = "none")
     } else {
-      p <- p + geom_area(mapping = aes(x = id, y = value, fill = experts))
+      p <- p + geom_area(mapping = aes(x = time, y = value, fill = experts))
       p <- p + scale_fill_manual(name = "Experts", values = colors)
     }
     
@@ -119,7 +119,7 @@ ggopera.mixture <- function(x, type = 1, dates = NULL, col = NULL) {
     cumul.losses.long <- reshape.opera(cumul.losses, names.experts)
     cumul.exploss.df <- data.frame(cumul.exploss)
     names(cumul.exploss.df) <- "value"
-    cumul.exploss.df$id <- seq_len(nrow(cumul.exploss.df))
+    cumul.exploss.df$time <- seq_len(nrow(cumul.exploss.df))
     cumul.exploss.df$experts <- x$model
     
     # lines size
@@ -128,11 +128,11 @@ ggopera.mixture <- function(x, type = 1, dates = NULL, col = NULL) {
     cumul.df <- rbind(cumul.losses.long, cumul.exploss.df)
     
     if (!is.null(dates) && length(dates) == nrow(x$weights)) {
-      cumul.df$id <- dates
+      cumul.df$time <- dates
     }
     
     p <- ggplot(data = cumul.df)
-    p <- p + geom_line(mapping = aes(x = id, y = value, color = experts, size = size))
+    p <- p + geom_line(mapping = aes(x = time, y = value, color = experts, size = size))
     p <- p + labs(title = "Cumulative square loss", y = "Cumulative loss", x = NULL)
     p <- p + scale_color_manual(name = "Experts", values = colors)
     p <- p + scale_size_identity()
@@ -148,7 +148,7 @@ ggopera.mixture <- function(x, type = 1, dates = NULL, col = NULL) {
     cumul.residuals.long <- reshape.opera(cumul.residuals, names.experts)
     cumul.expres.df <- data.frame(cumul.expres)
     names(cumul.expres.df) <- "value"
-    cumul.expres.df$id <- seq_len(nrow(cumul.expres.df))
+    cumul.expres.df$time <- seq_len(nrow(cumul.expres.df))
     cumul.expres.df$experts <- x$model
     
     # lines size
@@ -157,11 +157,11 @@ ggopera.mixture <- function(x, type = 1, dates = NULL, col = NULL) {
     cumul.residuals.df <- rbind(cumul.residuals.long, cumul.expres.df)
     
     if (!is.null(dates) && length(dates) == nrow(x$weights)) {
-      cumul.residuals.df$id <- dates
+      cumul.residuals.df$time <- dates
     }
     
     p <- ggplot(data = cumul.residuals.df)
-    p <- p + geom_line(mapping = aes(x = id, y = value, color = experts, size = size))
+    p <- p + geom_line(mapping = aes(x = time, y = value, color = experts, size = size))
     p <- p + labs(title = "Cumulative residuals", y = "Cumulative residuals", x = NULL)
     p <- p + scale_color_manual(name = "Experts", values = colors)
     p <- p + scale_size_identity()
@@ -222,7 +222,7 @@ ggopera.mixture <- function(x, type = 1, dates = NULL, col = NULL) {
 
 
 reshape.opera <- function(data, experts) {
-  reshape(
+  res <- reshape(
     data = data,
     varying = list(experts),
     direction = "long", 
@@ -230,6 +230,9 @@ reshape.opera <- function(data, experts) {
     times = experts, 
     timevar = "experts"
   )
+  names(res)[names(res) == "id"] <- "time"
+  rownames(res) <- NULL
+  return(res)
 }
 
 
@@ -249,10 +252,10 @@ ggCumulative <- function(W, X, Y, smooth = FALSE, plot.Y = FALSE, alpha = 0.1, d
   mat.long$experts <- factor(mat.long$experts, levels = rev(names(mat)), ordered = TRUE)
   
   if (!is.null(dates)) {
-    mat.long$id <- dates
+    mat.long$time <- dates
   }
   
-  Y.df <- data.frame(id = time)
+  Y.df <- data.frame(time = time)
   if (smooth) {
     Y.df$value <- lowess(x = time, y = Y, f = alpha)$y
   } else {
@@ -260,13 +263,13 @@ ggCumulative <- function(W, X, Y, smooth = FALSE, plot.Y = FALSE, alpha = 0.1, d
   }
   
   if (!is.null(dates)) {
-    Y.df$id <- dates
+    Y.df$time <- dates
   }
   
   p <- ggplot(data = mat.long)
-  p <- p + geom_area(mapping = aes(x = id, y = value, fill = experts))
+  p <- p + geom_area(mapping = aes(x = time, y = value, fill = experts))
   if (plot.Y) {
-    p <- p + geom_line(data = Y.df, mapping = aes(x = id, y = value), linetype = "longdash", size = 1.05)
+    p <- p + geom_line(data = Y.df, mapping = aes(x = time, y = value), linetype = "longdash", size = 1.05)
   }
   p <- p + labs(title = "Contribution of each expert to prediction", y = NULL, x = NULL)
   p
