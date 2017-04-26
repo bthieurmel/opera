@@ -5,7 +5,7 @@
 
 library("opera")
 
-source(system.file("modules/modules-data.R", package = "opera"), echo = FALSE, local = TRUE)
+suppressWarnings(source(system.file("modules/modules-data.R", package = "opera"), echo = FALSE, local = TRUE))
 
 
 

@@ -52,8 +52,10 @@ for (i in seq(idx_data_test)) {
 
 
 # A gradient boosting model using caret package
-gbm.fit <- train(Load ~ IPI + IPI_CVS + Temp + Temp1 + Time + Load1 + NumWeek, 
-                 data = data_train, method = "gbm")
+garbage <- capture.output(
+  gbm.fit <- train(Load ~ IPI + IPI_CVS + Temp + Temp1 + Time + Load1 + NumWeek, 
+                   data = data_train, method = "gbm")
+)
 gbm.forecast <- predict(gbm.fit, newdata = data_test)
 
 
