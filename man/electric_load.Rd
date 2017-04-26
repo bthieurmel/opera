@@ -25,4 +25,3 @@ together with several covariates, including temperature, industrial production i
  detach(electric_load)
 }
 \keyword{datasets}
-

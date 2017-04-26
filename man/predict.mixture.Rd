@@ -55,4 +55,3 @@ Performs sequential predictions and updates
 of a mixture object based on new observations 
 and expert advice.
 }
-
