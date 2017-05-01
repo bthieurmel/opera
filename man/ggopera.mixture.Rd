@@ -4,13 +4,18 @@
 \alias{ggopera.mixture}
 \title{Plot an object of class mixture with ggplot2}
 \usage{
-\method{ggopera}{mixture}(x, type = 1, dates = NULL, col = NULL)
+\method{ggopera}{mixture}(x, out = "mixture", type = 1,
+  prevision.experts = FALSE, dates = NULL, col = NULL)
 }
 \arguments{
 \item{x}{an object of class mixture. If awake is provided (i.e., some experts are unactive), 
 their residuals and cumulative losses are computed by using the predictions of the mixture.}
 
-\item{type}{which graphic to plot, a value between 1 and 6.}
+\item{out}{\code{"mixture"} to plot mixture results or \code{"prevision"} to plot mixtures's prevesion.}
+
+\item{type}{if \code{out = "mixture"}, which graphic to plot, a value between 1 and 6.}
+
+\item{prevision.experts}{if \code{out = "prevision"}, plot prevision from the experts ?}
 
 \item{dates}{a vector of dates to represent the x axis labels,}
 

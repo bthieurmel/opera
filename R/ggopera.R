@@ -18,16 +18,20 @@ ggopera <- function(object, ...) {
 #'
 #' @param x an object of class mixture. If awake is provided (i.e., some experts are unactive), 
 #' their residuals and cumulative losses are computed by using the predictions of the mixture.
-#' @param type which graphic to plot, a value between 1 and 6.
+#' @param out \code{"mixture"} to plot mixture results or \code{"prevision"} to plot mixtures's prevesion.
+#' @param type if \code{out = "mixture"}, which graphic to plot, a value between 1 and 6.
+#' @param prevision.experts if \code{out = "prevision"}, plot prevision from the experts ?
 #' @param dates a vector of dates to represent the x axis labels, 
 #' @param col the color to use to represent each experts, if set to NULL (default) use R\code{RColorBrewer::brewer.pal(...,"Spectral"}
 #'
 #' @return A ggplot object
 #' @export
 #'
-ggopera.mixture <- function(x, type = 1, dates = NULL, col = NULL) {
+ggopera.mixture <- function(x, out = "mixture", type = 1, prevision.experts = FALSE, dates = NULL, col = NULL) {
   if (!requireNamespace("ggplot2", quietly = TRUE)) 
     stop("ggplot2 is needed for this function to work. Install it via install.packages(\"ggplot2\")", call. = FALSE)
+  
+  out <- match.arg(arg = out, choices = c("mixture", "prevision"))
   
   x$experts <- data.frame(x$experts)
   K <- length(x$experts)
@@ -63,157 +67,208 @@ ggopera.mixture <- function(x, type = 1, dates = NULL, col = NULL) {
   colors <- c("black", col)
   names(colors) <- c(x$model, names.experts)
   
-  if (type == 1) { # area chart
-    
-    weights <- x$weights
-    o <- order(colSums(weights), decreasing = FALSE)
-    weights <- weights[, o]
-    weights.long <- reshape.opera(x$weights, names.experts)
-    weights.long$experts <- factor(weights.long$experts, levels = names(weights), ordered = TRUE)
-    if (!is.null(dates) && length(dates) == nrow(x$weights)) {
-      weights.long$time <- dates
-    }
-    p <- ggplot(data = weights.long)
-    if (x$model == "Ridge") {
-      p <- p + geom_line(mapping = aes(x = time, y = value, color = experts, linetype = experts), size = 1.2)
-      p <- p + scale_color_manual(name = "Experts", values = colors) + guides(linetype = "none")
-    } else {
-      p <- p + geom_area(mapping = aes(x = time, y = value, fill = experts))
+  if (out == "mixture") {
+    if (type == 1) { # area chart
+      
+      weights <- x$weights
+      o <- order(colSums(weights), decreasing = FALSE)
+      weights <- weights[, o]
+      weights.long <- reshape.opera(x$weights, names.experts)
+      weights.long$experts <- factor(weights.long$experts, levels = names(weights), ordered = TRUE)
+      if (!is.null(dates) && length(dates) == nrow(x$weights)) {
+        weights.long$time <- dates
+      }
+      p <- ggplot(data = weights.long)
+      if (x$model == "Ridge") {
+        p <- p + geom_line(mapping = aes(x = time, y = value, color = experts, linetype = experts), size = 1.2)
+        p <- p + scale_color_manual(name = "Experts", values = colors) + guides(linetype = "none")
+      } else {
+        p <- p + geom_area(mapping = aes(x = time, y = value, fill = experts))
+        p <- p + scale_fill_manual(name = "Experts", values = colors)
+      }
+      
+      p <- p + labs(title = "Weights associated with the experts", y = "Weights", x = NULL)
+      
+      
+    } else if (type == 2) { # boxplots
+      
+      if (!is.null(x$awake)) {
+        pond <- apply(x$awake[d*(1:T),],1,sum)
+        normalized.weights <- x$weights * pond / (K*x$awake[d*(1:T),])
+        normalized.weights[x$awake[d*(1:T),] == pond] <- NaN
+      } else {
+        normalized.weights <- x$weights 
+      }
+      
+      i.order <- w.order[1:min(K, 20)]
+      normalized.weights <- normalized.weights[, i.order]
+      normalized.weights.long <- reshape.opera(normalized.weights, names.experts)
+      normalized.weights.long$experts <- factor(normalized.weights.long$experts, levels = names(normalized.weights), ordered = TRUE)
+      
+      p <- ggplot(data = normalized.weights.long)
+      p <- p + geom_boxplot(mapping = aes(x = experts, y = value, fill = experts))
+      p <- p + labs(title = "Weights associated with the experts", y = "Weights", x = NULL)
       p <- p + scale_fill_manual(name = "Experts", values = colors)
+      p <- p + guides(fill = guide_legend(reverse = TRUE))
+      
+      colx <- colors[names.experts]
+      colx <- colx[i.order]
+      
+    } else if (type == 3) {# Cumulative loss
+      
+      pred.experts <- (x$experts * x$awake + x$prediction * (1-x$awake))
+      
+      cumul.losses <- apply(loss(pred.experts, x$Y, x$loss.type), 2, cumsum)[seq(d,T*d,by=d),]
+      cumul.exploss <- cumsum(loss(x$prediction, x$Y, x$loss.type))[seq(d,T*d,by=d)]
+      
+      cumul.losses <- as.data.frame(cumul.losses)
+      cumul.losses.long <- reshape.opera(cumul.losses, names.experts)
+      cumul.exploss.df <- data.frame(cumul.exploss)
+      names(cumul.exploss.df) <- "value"
+      cumul.exploss.df$time <- seq_len(nrow(cumul.exploss.df))
+      cumul.exploss.df$experts <- x$model
+      
+      # lines size
+      cumul.losses.long$size <- 1
+      cumul.exploss.df$size <- 1.2
+      cumul.df <- rbind(cumul.losses.long, cumul.exploss.df)
+      
+      if (!is.null(dates) && length(dates) == nrow(x$weights)) {
+        cumul.df$time <- dates
+      }
+      
+      p <- ggplot(data = cumul.df)
+      p <- p + geom_line(mapping = aes(x = time, y = value, color = experts, size = size))
+      p <- p + labs(title = "Cumulative square loss", y = "Cumulative loss", x = NULL)
+      p <- p + scale_color_manual(name = "Experts", values = colors)
+      p <- p + scale_size_identity()
+      
+    } else if (type == 4) { # Cumulative residuals
+      
+      pred.experts <- (x$experts * x$awake + x$prediction * (1-x$awake))
+      
+      cumul.residuals <- apply(x$Y - pred.experts, 2, cumsum)[seq(d,T*d,by=d),]
+      cumul.expres <- cumsum(x$Y - x$prediction)[seq(d,T*d,by=d)]
+      
+      cumul.residuals <- as.data.frame(cumul.residuals)
+      cumul.residuals.long <- reshape.opera(cumul.residuals, names.experts)
+      cumul.expres.df <- data.frame(cumul.expres)
+      names(cumul.expres.df) <- "value"
+      cumul.expres.df$time <- seq_len(nrow(cumul.expres.df))
+      cumul.expres.df$experts <- x$model
+      
+      # lines size
+      cumul.residuals.long$size <- 1
+      cumul.expres.df$size <- 1.2
+      cumul.residuals.df <- rbind(cumul.residuals.long, cumul.expres.df)
+      
+      if (!is.null(dates) && length(dates) == nrow(x$weights)) {
+        cumul.residuals.df$time <- dates
+      }
+      
+      p <- ggplot(data = cumul.residuals.df)
+      p <- p + geom_line(mapping = aes(x = time, y = value, color = experts, size = size))
+      p <- p + labs(title = "Cumulative residuals", y = "Cumulative residuals", x = NULL)
+      p <- p + scale_color_manual(name = "Experts", values = colors)
+      p <- p + scale_size_identity()
+      
+    } else if (type == 5) { # losses
+      
+      pred.experts <- (x$experts * x$awake + x$prediction * (1-x$awake))
+      
+      x$loss.experts <- apply(loss(x = pred.experts, y = x$Y, loss.type = x$loss.type), 2, mean)
+      err.unif <- lossConv(rep(1/K, K), x$Y, x$experts, awake = x$awake, loss.type = x$loss.type)
+      err.mixt <- x$loss
+      
+      losses <- data.frame(
+        value = c(x$loss.experts, err.unif, err.mixt),
+        experts = c(names(x$experts), "Uniform", x$model),
+        cols = c(col, "#000000", "#000000"),
+        shape = c(rep(16, K), 8, 8),
+        stringsAsFactors = FALSE
+      )
+      losses <- losses[!duplicated(losses$experts, fromLast = TRUE), ]
+      losses <- losses[order(losses$value, decreasing = FALSE), ]
+      losses$index <- seq_along(losses$value)
+      
+      
+      p <- ggplot(data = losses)
+      p <- p + geom_path(mapping = aes(x = index, y = value))
+      p <- p + geom_point(mapping = aes(x = index, y = value, shape = shape, color = cols), size = 4)
+      p <- p + labs(title = "Average loss suffered by the experts", y = "Square loss", x = NULL)
+      p <- p + scale_shape_identity()
+      p <- p + scale_color_identity()
+      p <- p + scale_x_continuous(labels = losses$experts)
+      
+      colx <- losses$cols
+      
+    } else if (type == 6) { # cumulative plot of the series
+      
+      if (x$d ==1) {
+        p <- ggCumulative(W = x$weights, X = x$experts, Y = x$Y, smooth = TRUE, alpha = 0.01, plot.Y = TRUE, dates = dates)
+      } else {
+        X <- apply(seriesToBlock(X = x$experts,d = x$d),c(1,3),mean)
+        Y <- apply(seriesToBlock(x$Y,d = x$d),1,mean)
+        colnames(X) <- x$names.experts
+        cumulativePlot(W = x$weights,X = X, Y = Y,smooth = TRUE,alpha = 0.01,plot.Y = TRUE, col.pal = col)    
+        p <- ggCumulative(W = x$weights, X = X, Y = Y, smooth = TRUE, alpha = 0.01, plot.Y = TRUE, dates = dates)
+      }
+      
+      p <- p + scale_fill_manual(name = "Experts", values = colors)
+      p <- p + guides(fill = guide_legend(reverse = TRUE))
+      
     }
+  } else if (out == "prevision") {
     
-    p <- p + labs(title = "Weights associated with the experts", y = "Weights", x = NULL)
-    
-    
-  } else if (type == 2) { # boxplots
-    
-    if (!is.null(x$awake)) {
-      pond <- apply(x$awake[d*(1:T),],1,sum)
-      normalized.weights <- x$weights * pond / (K*x$awake[d*(1:T),])
-      normalized.weights[x$awake[d*(1:T),] == pond] <- NaN
-    } else {
-      normalized.weights <- x$weights 
-    }
-    
-    i.order <- w.order[1:min(K, 20)]
-    normalized.weights <- normalized.weights[, i.order]
-    normalized.weights.long <- reshape.opera(normalized.weights, names.experts)
-    normalized.weights.long$experts <- factor(normalized.weights.long$experts, levels = names(normalized.weights), ordered = TRUE)
-    
-    p <- ggplot(data = normalized.weights.long)
-    p <- p + geom_boxplot(mapping = aes(x = experts, y = value, fill = experts))
-    p <- p + labs(title = "Weights associated with the experts", y = "Weights", x = NULL)
-    p <- p + scale_fill_manual(name = "Experts", values = colors)
-    p <- p + guides(fill = guide_legend(reverse = TRUE))
-    
-    colx <- colors[names.experts]
-    colx <- colx[i.order]
-    
-  } else if (type == 3) {# Cumulative loss
-    
-    pred.experts <- (x$experts * x$awake + x$prediction * (1-x$awake))
-    
-    cumul.losses <- apply(loss(pred.experts, x$Y, x$loss.type), 2, cumsum)[seq(d,T*d,by=d),]
-    cumul.exploss <- cumsum(loss(x$prediction, x$Y, x$loss.type))[seq(d,T*d,by=d)]
-    
-    cumul.losses <- as.data.frame(cumul.losses)
-    cumul.losses.long <- reshape.opera(cumul.losses, names.experts)
-    cumul.exploss.df <- data.frame(cumul.exploss)
-    names(cumul.exploss.df) <- "value"
-    cumul.exploss.df$time <- seq_len(nrow(cumul.exploss.df))
-    cumul.exploss.df$experts <- x$model
-    
-    # lines size
-    cumul.losses.long$size <- 1
-    cumul.exploss.df$size <- 1.2
-    cumul.df <- rbind(cumul.losses.long, cumul.exploss.df)
+    prev.experts <- reshape.opera(data = as.data.frame(x$experts), experts = names.experts)
     
     if (!is.null(dates) && length(dates) == nrow(x$weights)) {
-      cumul.df$time <- dates
+      prev.experts$time <- dates
     }
     
-    p <- ggplot(data = cumul.df)
-    p <- p + geom_line(mapping = aes(x = time, y = value, color = experts, size = size))
-    p <- p + labs(title = "Cumulative square loss", y = "Cumulative loss", x = NULL)
-    p <- p + scale_color_manual(name = "Experts", values = colors)
-    p <- p + scale_size_identity()
-    
-  } else if (type == 4) { # Cumulative residuals
-    
-    pred.experts <- (x$experts * x$awake + x$prediction * (1-x$awake))
-    
-    cumul.residuals <- apply(x$Y - pred.experts, 2, cumsum)[seq(d,T*d,by=d),]
-    cumul.expres <- cumsum(x$Y - x$prediction)[seq(d,T*d,by=d)]
-    
-    cumul.residuals <- as.data.frame(cumul.residuals)
-    cumul.residuals.long <- reshape.opera(cumul.residuals, names.experts)
-    cumul.expres.df <- data.frame(cumul.expres)
-    names(cumul.expres.df) <- "value"
-    cumul.expres.df$time <- seq_len(nrow(cumul.expres.df))
-    cumul.expres.df$experts <- x$model
-    
-    # lines size
-    cumul.residuals.long$size <- 1
-    cumul.expres.df$size <- 1.2
-    cumul.residuals.df <- rbind(cumul.residuals.long, cumul.expres.df)
-    
+    prev.mixture <- data.frame(value = x$prediction)
+    prev.mixture$experts <- x$model
     if (!is.null(dates) && length(dates) == nrow(x$weights)) {
-      cumul.residuals.df$time <- dates
-    }
-    
-    p <- ggplot(data = cumul.residuals.df)
-    p <- p + geom_line(mapping = aes(x = time, y = value, color = experts, size = size))
-    p <- p + labs(title = "Cumulative residuals", y = "Cumulative residuals", x = NULL)
-    p <- p + scale_color_manual(name = "Experts", values = colors)
-    p <- p + scale_size_identity()
-    
-  } else if (type == 5) { # losses
-    
-    pred.experts <- (x$experts * x$awake + x$prediction * (1-x$awake))
-    
-    x$loss.experts <- apply(loss(x = pred.experts, y = x$Y, loss.type = x$loss.type), 2, mean)
-    err.unif <- opera:::lossConv(rep(1/K, K), x$Y, x$experts, awake = x$awake, loss.type = x$loss.type)
-    err.mixt <- x$loss
-    
-    losses <- data.frame(
-      value = c(x$loss.experts, err.unif, err.mixt),
-      experts = c(names(x$experts), "Uniform", x$model),
-      cols = c(col, "#000000", "#000000"),
-      shape = c(rep(16, K), 8, 8),
-      stringsAsFactors = FALSE
-    )
-    losses <- losses[order(losses$value, decreasing = FALSE), ]
-    losses$index <- seq_along(losses$value)
-    
-    p <- ggplot(data = losses)
-    p <- p + geom_path(mapping = aes(x = index, y = value))
-    p <- p + geom_point(mapping = aes(x = index, y = value, shape = shape, color = cols), size = 4)
-    p <- p + labs(title = "Average loss suffered by the experts", y = "Square loss", x = NULL)
-    p <- p + scale_shape_identity()
-    p <- p + scale_color_identity()
-    p <- p + scale_x_continuous(labels = losses$experts)
-    
-    colx <- losses$cols
-
-  } else if (type == 6) { # cumulative plot of the series
-    
-    if (x$d ==1) {
-      p <- ggCumulative(W = x$weights, X = x$experts, Y = x$Y, smooth = TRUE, alpha = 0.01, plot.Y = TRUE, dates = dates)
+      prev.mixture$time <- dates
     } else {
-      X <- apply(seriesToBlock(X = x$experts,d = x$d),c(1,3),mean)
-      Y <- apply(seriesToBlock(x$Y,d = x$d),1,mean)
-      colnames(X) <- x$names.experts
-      cumulativePlot(W = x$weights,X = X, Y = Y,smooth = TRUE,alpha = 0.01,plot.Y = TRUE, col.pal = col)    
-      p <- ggCumulative(W = x$weights, X = X, Y = Y, smooth = TRUE, alpha = 0.01, plot.Y = TRUE, dates = dates)
+      prev.mixture$time <- seq_len(nrow(prev.mixture))
     }
     
-    p <- p + scale_fill_manual(name = "Experts", values = colors)
-    p <- p + guides(fill = guide_legend(reverse = TRUE))
+    obs <- data.frame(value = x$Y)
+    obs$experts <- "Y"
+    if (!is.null(dates) && length(dates) == nrow(x$weights)) {
+      obs$time <- dates
+    } else {
+      obs$time <- seq_len(nrow(obs))
+    }
+    
+    prev.opera <- rbind(prev.experts, prev.mixture, obs)
+    
+    name.model <- x$model
+    
+    p <- ggplot(data = prev.opera)
+    p <- p + geom_line(data = function(x) x[x$experts == "Y", ], 
+                       mapping = aes(x = time, y = value, alpha = experts), color = "firebrick")
+    p <- p + geom_line(data = function(x) x[x$experts == name.model, ], 
+                       mapping = aes(x = time, y = value, linetype = experts), color = "black")
+    if (prevision.experts) {
+      p <- p + geom_line(data = function(x) x[! x$experts %in% c("Y", name.model), ],
+                         mapping = aes(x = time, y = value, color = experts))
+    }
+    p <- p + scale_alpha_manual(name = "Observed", values = 1,
+                                guide = guide_legend(override.aes = list(colour = "firebrick", size = 1.05)), labels = "Y")
+    p <- p + scale_linetype_manual(name = x$model, values = 1,
+                                   guide = guide_legend(override.aes = list(colour = "black", size = 1.05)), labels = x$model)
+    if (prevision.experts) {
+      p <- p + scale_color_manual(name = "Experts", values = colors)
+    }
+    
+    p <- p + labs(title = "Previsions", x = NULL, y = NULL)
     
   }
   
   
-  if (type %in% c(2, 5)) {
+  if (out == "mixture" & type %in% c(2, 5)) {
     p <- p + theme_minimal() %+replace% theme(axis.text.x = element_text(colour = colx))
   } else {
     p <- p + theme_minimal()
